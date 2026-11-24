@@ -3,17 +3,6 @@ const { writeFileSync } = require('node:fs');
 module.exports = async function checkUpstream({ github, context, core }) {
   core.setOutput('build', 'false');
 
-  if (context.eventName === 'schedule') {
-    const { data: run } = await github.rest.actions.getWorkflowRun({
-      ...context.repo, run_id: context.runId,
-    });
-    const twoHourSlot = Math.floor(Date.parse(run.created_at) / (2 * 60 * 60 * 1000));
-    if (twoHourSlot % 5 !== 0) {
-      await core.summary.addRaw('Outside the ten-hour upstream check slot.').write();
-      return;
-    }
-  }
-
   const upstream = { owner: 'deepseek-ai', repo: 'deepseek-harness' };
   const { data: tags } = await github.rest.repos.listTags({ ...upstream, per_page: 100 });
   const tag = tags.find(entry => /^dsh-v\d/.test(entry.name));
@@ -41,7 +30,7 @@ module.exports = async function checkUpstream({ github, context, core }) {
   if (tag.name !== `dsh-v${manifest.version}` || !manifest.engines?.node) {
     throw new Error('The upstream tag must match package.json and declare its Node.js requirement.');
   }
-  const installer = `deepseek-harness-${manifest.version}-win-x64-unsigned.exe`;
+  const installer = `${manifest.version}-win-x64.exe`;
 
   let existing;
   try {
@@ -63,6 +52,7 @@ module.exports = async function checkUpstream({ github, context, core }) {
     body: release.body,
     prerelease: release.prerelease,
     installer,
+    sourceInstaller: `deepseek-harness-${manifest.version}-win-x64-unsigned.exe`,
   }, null, 2) + '\n');
   core.setOutput('tag', tag.name);
   core.setOutput('sha', tag.commit.sha);

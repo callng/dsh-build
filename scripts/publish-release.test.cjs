@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = require('node:fs');
+const { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const { test, after } = require('node:test');
@@ -23,12 +23,13 @@ childProcess.execFileSync = originalExec;
 const metadata = {
   tag: 'dsh-v0.2.3-alpha.2', name: 'v0.2.3-alpha.2', prerelease: true,
   body: '[中文](#cn) | [English](#en)\r\n\r\n- 更新 @author\r\nFull Changelog: https://example.com/a...b',
-  installer: 'deepseek-harness-0.2.3-alpha.2-win-x64-unsigned.exe',
+  installer: '0.2.3-alpha.2-win-x64.exe',
+  sourceInstaller: 'deepseek-harness-0.2.3-alpha.2-win-x64-unsigned.exe',
 };
 writeFileSync('release/upstream-release.json', JSON.stringify(metadata));
-writeFileSync(join('release', metadata.installer), 'installer-fixture');
+writeFileSync(join('release', metadata.sourceInstaller), 'installer-fixture');
 
-test('publication uploads the EXE into a draft before exposing the identical tag and changelog', async () => {
+test('publication renames the EXE without changing its contents and uploads it before publishing', async () => {
   const requests = [];
   await publishRelease({
     context: { repo: { owner: 'callng', repo: 'dsh-build' }, sha: 'workflow-commit' },
@@ -58,6 +59,7 @@ test('publication uploads the EXE into a draft before exposing the identical tag
     assert.equal(request.prerelease, true);
   }
   assert.equal(uploads[0][0], 'gh');
+  assert.equal(readFileSync(join('release', metadata.installer), 'utf8'), 'installer-fixture');
   assert.deepEqual(uploads[0][1], [
     'release', 'upload', metadata.tag, join(directory, 'release', metadata.installer),
     '--repo', 'callng/dsh-build', '--clobber',

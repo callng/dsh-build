@@ -14,20 +14,19 @@ after(() => {
 });
 
 const tag = 'dsh-v0.2.3-alpha.2';
-const installer = 'deepseek-harness-0.2.3-alpha.2-win-x64-unsigned.exe';
+const installer = '0.2.3-alpha.2-win-x64.exe';
 const notes = '[中文](#cn) | [English](#en)\r\n\r\n- 更新 @author\r\nFull Changelog: https://github.com/deepseek-ai/deepseek-harness/compare/a...b';
 
-function fixture({ existing, upstreamStatus, version = '0.2.3-alpha.2', event = 'push', createdAt } = {}) {
+function fixture({ existing, upstreamStatus, version = '0.2.3-alpha.2', event = 'push' } = {}) {
   const outputs = {};
   let tagRequests = 0;
   const summary = { addRaw() { return this; }, async write() {} };
   return {
     outputs,
     tagRequests: () => tagRequests,
-    context: { eventName: event, repo: { owner: 'callng', repo: 'dsh-build' }, runId: 1 },
+    context: { eventName: event, repo: { owner: 'callng', repo: 'dsh-build' } },
     core: { setOutput: (name, value) => { outputs[name] = value; }, summary },
     github: { rest: {
-      actions: { getWorkflowRun: async () => ({ data: { created_at: createdAt } }) },
       repos: {
         listTags: async () => {
           tagRequests++;
@@ -68,6 +67,7 @@ test('the first run builds the newest DSH prerelease and preserves all upstream 
   assert.equal(metadata.name, 'v0.2.3-alpha.2');
   assert.equal(metadata.prerelease, true);
   assert.equal(metadata.installer, installer);
+  assert.equal(metadata.sourceInstaller, 'deepseek-harness-0.2.3-alpha.2-win-x64-unsigned.exe');
 });
 
 test('a published installer prevents a duplicate build', async () => {
@@ -100,17 +100,9 @@ test('a tag pointing to a different package version is rejected before building'
   await assert.rejects(checkUpstream(fixture({ version: '0.2.3-alpha.1' })), /must match package.json/);
 });
 
-test('scheduled checks stay ten hours apart across midnight; other wake-ups do not query upstream', async () => {
-  const start = Date.parse('2026-11-24T00:17:00Z');
-  const checked = [];
-  for (let hour = 0; hour < 72; hour += 2) {
-    const input = fixture({ event: 'schedule', createdAt: new Date(start + hour * 3600000).toISOString() });
-    await checkUpstream(input);
-    if (input.tagRequests()) checked.push(hour);
-    else assert.equal(input.outputs.build, 'false');
-  }
-  assert.ok(checked.length >= 7);
-  for (let index = 1; index < checked.length; index++) {
-    assert.equal(checked[index] - checked[index - 1], 10);
-  }
+test('scheduled runs check upstream without an additional time gate or workflow-run API request', async () => {
+  const input = fixture({ event: 'schedule' });
+  await checkUpstream(input);
+  assert.equal(input.tagRequests(), 1);
+  assert.equal(input.outputs.build, 'true');
 });
